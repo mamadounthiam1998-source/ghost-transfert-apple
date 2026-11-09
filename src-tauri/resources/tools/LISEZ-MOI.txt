@@ -1,0 +1,3 @@
+Placez ici les binaires libimobiledevice (idevice_id, ideviceinfo, idevicebackup2 et leurs DLL/dylib).
+Ils sont recherchés en priorité dans ce dossier, puis dans le PATH du système.
+Voir docs/INSTALLATION.md.

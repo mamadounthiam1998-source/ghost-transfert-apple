@@ -1,0 +1,79 @@
+name: Tests et installateurs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests (coeur Rust + interface)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+      - name: Tests du coeur (cryptographie, sécurité, transfert, sauvegarde)
+        run: cargo test -p ghost-core --locked
+      - name: Clippy
+        run: cargo clippy -p ghost-core --all-targets --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typage TypeScript
+        run: npm run typecheck
+      - name: Tests de l'interface
+        run: npm test
+      - name: Compilation de l'interface
+        run: npm run build
+
+  installateurs:
+    name: Installateur ${{ matrix.name }}
+    needs: tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows (x64)
+            os: windows-latest
+            args: ""
+          - name: macOS (Apple Silicon)
+            os: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - name: macOS (Intel)
+            os: macos-latest
+            args: "--target x86_64-apple-darwin"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          key: ${{ matrix.args }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Construction de l'application et des installateurs
+        run: npx tauri build ${{ matrix.args }}
+      - name: Publication des installateurs (artefacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-transfert-apple-${{ matrix.os }}-${{ contains(matrix.args, 'x86_64') && 'x64' || (contains(matrix.args, 'aarch64') && 'arm64' || 'x64') }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/*/release/bundle/dmg/*.dmg
