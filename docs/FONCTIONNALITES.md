@@ -16,6 +16,10 @@ Légende : ✅ prouvé par test automatisé · 🔧 écrit, validé seulement en
 - 🔧 Détection d'iPhone/iPad (`idevice_id`, `ideviceinfo`), sauvegarde et restauration (`idevicebackup2`), activation du chiffrement des sauvegardes.
 - 🔧 Interface complète : compilée et rendue (captures), parcours exercés avec un pont Tauri simulé, **non testée de bout en bout dans l'application Tauri**.
 
+## Détails de l'iPhone et écran
+- 🔧 Détails complets (modèle, iOS, build, couleur, MAC, identifiants masqués par défaut) et **batterie** (niveau, charge) via `ideviceinfo` ; **cycles de charge et capacité maximale estimée** via `idevicediagnostics` si l'appareil l'expose. Analyse des sorties testée sur exemples, **non vérifiée sur un vrai iPhone**.
+- ⚠ **Écran réel de l'iPhone** : `idevicescreenshot` exige l'« image développeur » montée sur l'appareil (iOS 16 et moins, mode développeur). **iOS 17 et plus n'est pas pris en charge** par libimobiledevice 1.3 : l'application l'indique au lieu d'afficher un faux écran.
+
 ## Limitations restantes
 - ⚠ Outils libimobiledevice : embarqués dans l'installateur Windows (démarrage vérifié en CI) ; **non embarqués sous macOS** (`brew install libimobiledevice`).
 - ❌ Installateurs non signés ni notarisés.

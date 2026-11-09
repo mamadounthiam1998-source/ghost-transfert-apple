@@ -40,6 +40,8 @@ fn main() {
             commands::save_settings,
             commands::list_devices,
             commands::pair_device,
+            commands::device_details,
+            commands::device_screenshot,
             commands::check_compat,
             commands::analyze_folder,
             commands::analyze_backup,

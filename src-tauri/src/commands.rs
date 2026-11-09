@@ -5,8 +5,8 @@ use ghost_core::{
     backup::{BackupInfo, BackupManager, VerifyReport},
     crypto::KdfParams,
     devices::{
-        check_compatibility, Compatibility, DeviceBackend, DeviceInfo, LibimobiledeviceBackend, RestoreOptions,
-        SimBackend,
+        check_compatibility, Compatibility, DeviceBackend, DeviceDetails, DeviceInfo, LibimobiledeviceBackend,
+        RestoreOptions, Screenshot, SimBackend,
     },
     diagnostics::{run_diagnostics, security_selftest as core_selftest, Check, REQUIRED_TOOLS},
     history::{HistoryEntry, HistoryStore},
@@ -242,6 +242,19 @@ pub async fn pair_device(st: St<'_>, udid: String) -> Result<String> {
         r
     })
     .await
+}
+
+/// Détails complets (batterie, identité, système…). Les identifiants ne sont jamais journalisés.
+#[tauri::command]
+pub async fn device_details(st: St<'_>, udid: String) -> Result<DeviceDetails> {
+    let st = st.inner().clone();
+    blocking(move || st.backend().details(&udid)).await
+}
+
+#[tauri::command]
+pub async fn device_screenshot(st: St<'_>, udid: String) -> Result<Screenshot> {
+    let st = st.inner().clone();
+    blocking(move || st.backend().screenshot(&udid)).await
 }
 
 #[tauri::command]

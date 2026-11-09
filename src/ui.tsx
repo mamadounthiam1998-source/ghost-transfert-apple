@@ -129,7 +129,7 @@ export function Particles() {
   return <canvas ref={ref} className="particles" aria-hidden="true" />;
 }
 
-export function Phone({ label, on, name, tilt = 0 }: { label: string; on?: boolean; name?: string; tilt?: number }) {
+export function Phone({ label, on, name, tilt = 0, screen }: { label: string; on?: boolean; name?: string; tilt?: number; screen?: string | null }) {
   const id = `g${label.replace(/\W/g, "")}`;
   return (
     <div className={`phone ${tilt ? "b" : ""} ${on ? "on" : ""}`}>
@@ -144,10 +144,16 @@ export function Phone({ label, on, name, tilt = 0 }: { label: string; on?: boole
         </defs>
         <rect x="6" y="6" width="148" height="308" rx="30" fill={`url(#${id})`} />
         <rect x="11" y="11" width="138" height="298" rx="26" fill={`url(#${id}s)`} />
+        {screen && (
+          <>
+            <clipPath id={`${id}c`}><rect x="11" y="11" width="138" height="298" rx="26" /></clipPath>
+            <image href={screen} x="11" y="11" width="138" height="298" preserveAspectRatio="xMidYMid slice" clipPath={`url(#${id}c)`} />
+          </>
+        )}
         <rect x="58" y="20" width="44" height="12" rx="6" fill="#02050b" />
-        {on && <ellipse cx="80" cy="170" rx="46" ry="60" fill="#22d3ee" opacity="0.13" />}
-        <path d="M80 130c-18 0-30 13-30 29v44c0 3 3 4 5 2l6-6 6 6c1 1 3 1 4 0l7-7 7 7c1 1 3 1 4 0l6-6 6 6c2 2 5 1 5-2v-44c0-16-12-29-30-29z" fill={on ? "#67e8f9" : "#2b3a57"} opacity={on ? 0.9 : 0.6} />
-        <circle cx="70" cy="160" r="4" fill="#050a14" /><circle cx="90" cy="160" r="4" fill="#050a14" />
+        {on && !screen && <ellipse cx="80" cy="170" rx="46" ry="60" fill="#22d3ee" opacity="0.13" />}
+        {!screen && <path d="M80 130c-18 0-30 13-30 29v44c0 3 3 4 5 2l6-6 6 6c1 1 3 1 4 0l7-7 7 7c1 1 3 1 4 0l6-6 6 6c2 2 5 1 5-2v-44c0-16-12-29-30-29z" fill={on ? "#67e8f9" : "#2b3a57"} opacity={on ? 0.9 : 0.6} />}
+        {!screen && <><circle cx="70" cy="160" r="4" fill="#050a14" /><circle cx="90" cy="160" r="4" fill="#050a14" /></>}
       </svg>
       <div className="cap">{label}</div>
     </div>

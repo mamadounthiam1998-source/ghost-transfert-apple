@@ -53,6 +53,49 @@ pub struct DeviceInfo {
     pub note: Option<String>,
 }
 
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Battery {
+    pub percent: Option<u8>,
+    pub charging: Option<bool>,
+    pub plugged: Option<bool>,
+    pub full: Option<bool>,
+    pub cycle_count: Option<u32>,
+    /// Capacité maximale estimée (capacité nominale / capacité d'origine), si l'appareil l'expose.
+    pub health_percent: Option<u8>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DetailItem {
+    pub label: String,
+    pub value: String,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DetailGroup {
+    pub title: String,
+    /// Identifiants personnels (série, IMEI, UDID…) : masqués par défaut dans l'interface.
+    pub sensitive: bool,
+    pub items: Vec<DetailItem>,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceDetails {
+    pub battery: Option<Battery>,
+    pub groups: Vec<DetailGroup>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Screenshot {
+    pub mime: String,
+    /// Image encodée en base64.
+    pub data: String,
+}
+
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Compatibility {
@@ -88,6 +131,10 @@ pub trait DeviceBackend: Send + Sync {
     fn set_backup_encryption(&self, udid: &str, password: &str) -> Result<()>;
     /// Demande l'approbation « Se fier à cet ordinateur » sur l'appareil (appairage).
     fn pair(&self, udid: &str) -> Result<String>;
+    /// Informations détaillées (identité, système, batterie, réseau…).
+    fn details(&self, udid: &str) -> Result<DeviceDetails>;
+    /// Capture de l'écran de l'appareil (si l'appareil et iOS l'autorisent).
+    fn screenshot(&self, udid: &str) -> Result<Screenshot>;
 }
 
 pub fn friendly_model(product_type: &str) -> String {
@@ -162,6 +209,7 @@ pub fn check_compatibility(src: &DeviceInfo, dst: &DeviceInfo) -> Compatibility 
 
 pub fn parse_key_values(text: &str) -> HashMap<String, String> {
     text.lines()
+        .filter(|l| !l.starts_with(char::is_whitespace) && !l.starts_with('-'))
         .filter_map(|l| l.split_once(':'))
         .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
         .filter(|(k, _)| !k.is_empty())
@@ -203,6 +251,94 @@ pub fn usage_from_disk_usage(kv: &HashMap<String, String>, used: Option<u64>) ->
         }
     }
     v
+}
+
+fn yes_no(v: &str) -> String {
+    match v {
+        "true" => "Oui".into(),
+        "false" => "Non".into(),
+        other => other.to_string(),
+    }
+}
+
+/// Premier entier suivant `<key>NOM</key>` dans un plist XML (sortie d'idevicediagnostics).
+fn plist_int(text: &str, key: &str) -> Option<u64> {
+    let marker = format!("<key>{key}</key>");
+    let rest = &text[text.find(&marker)? + marker.len()..];
+    let rest = rest.trim_start();
+    let rest = rest.strip_prefix("<integer>")?;
+    rest[..rest.find("</integer>")?].trim().parse().ok()
+}
+
+pub fn parse_battery(battery_kv: &HashMap<String, String>, ioreg: &str) -> Option<Battery> {
+    let b = |k: &str| battery_kv.get(k).map(|v| v == "true");
+    let mut out = Battery {
+        percent: battery_kv.get("BatteryCurrentCapacity").and_then(|v| v.parse::<u32>().ok()).map(|p| p.min(100) as u8),
+        charging: b("BatteryIsCharging"),
+        plugged: b("ExternalConnected"),
+        full: b("FullyCharged"),
+        ..Default::default()
+    };
+    out.cycle_count = plist_int(ioreg, "CycleCount").map(|c| c as u32);
+    if let (Some(nom), Some(design)) = (plist_int(ioreg, "NominalChargeCapacity"), plist_int(ioreg, "DesignCapacity")) {
+        if design > 0 && nom > 0 {
+            out.health_percent = Some(((nom * 100 + design / 2) / design).min(100) as u8);
+        }
+    }
+    (out != Battery::default()).then_some(out)
+}
+
+/// Construit les groupes de détails à partir des sorties brutes ; seuls les champs présents sont affichés.
+pub fn build_details(info: &HashMap<String, String>, battery: Option<Battery>) -> DeviceDetails {
+    let get = |k: &str| info.get(k).filter(|v| !v.is_empty()).cloned();
+    let group = |title: &str, sensitive: bool, rows: Vec<(&str, Option<String>)>| DetailGroup {
+        title: title.into(),
+        sensitive,
+        items: rows
+            .into_iter()
+            .filter_map(|(l, v)| v.map(|value| DetailItem { label: l.into(), value }))
+            .collect(),
+    };
+    let model = get("ProductType").map(|p| friendly_model(&p));
+    let model_number = match (get("ModelNumber"), get("RegionInfo")) {
+        (Some(m), Some(r)) => Some(format!("{m}{r}")),
+        (Some(m), None) => Some(m),
+        _ => None,
+    };
+    let groups = vec![
+        group("Appareil", false, vec![
+            ("Nom", get("DeviceName")),
+            ("Modèle", model),
+            ("Référence", get("ProductType")),
+            ("Numéro de modèle", model_number),
+            ("Couleur", get("DeviceColor")),
+            ("Type", get("DeviceClass")),
+            ("Puce (architecture)", get("CPUArchitecture")),
+        ]),
+        group("Système", false, vec![
+            ("Version d'iOS", get("ProductVersion")),
+            ("Build", get("BuildVersion")),
+            ("Activation", get("ActivationState")),
+            ("Code de verrouillage", get("PasswordProtected").map(|v| yes_no(&v))),
+            ("Fuseau horaire", get("TimeZone")),
+        ]),
+        group("Réseau", false, vec![
+            ("Wi-Fi (adresse MAC)", get("WiFiAddress")),
+            ("Bluetooth (adresse MAC)", get("BluetoothAddress")),
+            ("Carte SIM", get("SIMStatus")),
+        ]),
+        group("Identifiants personnels", true, vec![
+            ("Numéro de série", get("SerialNumber")),
+            ("UDID", get("UniqueDeviceID")),
+            ("IMEI", get("InternationalMobileEquipmentIdentity")),
+            ("IMEI 2", get("InternationalMobileEquipmentIdentity2")),
+            ("Numéro de téléphone", get("PhoneNumber")),
+        ]),
+    ]
+    .into_iter()
+    .filter(|g| !g.items.is_empty())
+    .collect();
+    DeviceDetails { battery, groups }
 }
 
 fn parse_percent(line: &str) -> Option<f64> {
@@ -380,6 +516,58 @@ impl DeviceBackend for LibimobiledeviceBackend {
             )));
         }
         Ok(())
+    }
+
+    fn details(&self, udid: &str) -> Result<DeviceDetails> {
+        validate_udid(udid)?;
+        let o = self.tools.run("ideviceinfo", &["-u", udid], Duration::from_secs(10))?;
+        if o.code != 0 {
+            return Err(GhostError::Device("l'appareil n'a pas approuvé cet ordinateur : aucun détail disponible".into()));
+        }
+        let info = parse_key_values(&o.stdout);
+        let battery_kv = self
+            .tools
+            .run("ideviceinfo", &["-u", udid, "-q", "com.apple.mobile.battery"], Duration::from_secs(10))
+            .map(|o| parse_key_values(&o.stdout))
+            .unwrap_or_default();
+        // Cycles et santé : service de diagnostic, facultatif.
+        let ioreg = self
+            .tools
+            .run("idevicediagnostics", &["-u", udid, "ioregentry", "AppleSmartBattery"], Duration::from_secs(15))
+            .map(|o| o.stdout)
+            .unwrap_or_default();
+        Ok(build_details(&info, parse_battery(&battery_kv, &ioreg)))
+    }
+
+    fn screenshot(&self, udid: &str) -> Result<Screenshot> {
+        validate_udid(udid)?;
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        let tmp = std::env::temp_dir().join(format!("ghost-shot-{}-{nanos}.img", std::process::id()));
+        let path = tmp.to_string_lossy().into_owned();
+        let res = self.tools.run("idevicescreenshot", &["-u", udid, &path], Duration::from_secs(20));
+        let result = (|| -> Result<Screenshot> {
+            let o = res?;
+            let bytes = fs::read(&tmp).ok().filter(|b| !b.is_empty());
+            let Some(bytes) = bytes else {
+                let msg = format!("{}{}", o.stderr, o.stdout).to_lowercase();
+                return Err(GhostError::Device(if msg.contains("screenshotr") || msg.contains("developer") || msg.contains("disk image") {
+                    "Apple ne permet d'afficher l'écran qu'avec l'« image développeur » montée sur l'iPhone (iOS 16 et moins, mode développeur activé). iOS 17 et plus n'est pas pris en charge par cet outil.".into()
+                } else {
+                    format!("capture d'écran impossible : {}", crate::security::redact(format!("{}{}", o.stderr, o.stdout).trim()))
+                }));
+            };
+            let mime = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+                "image/png"
+            } else if bytes.starts_with(&[0xFF, 0xD8]) {
+                "image/jpeg"
+            } else {
+                return Err(GhostError::Device("l'appareil a renvoyé un format d'image (TIFF) que l'application ne sait pas afficher".into()));
+            };
+            use base64::Engine;
+            Ok(Screenshot { mime: mime.into(), data: base64::engine::general_purpose::STANDARD.encode(bytes) })
+        })();
+        let _ = fs::remove_file(&tmp);
+        result
     }
 
     fn pair(&self, udid: &str) -> Result<String> {
@@ -581,6 +769,30 @@ impl DeviceBackend for SimBackend {
     fn pair(&self, _udid: &str) -> Result<String> {
         Ok("Simulation : appareil déjà approuvé.".into())
     }
+
+    fn details(&self, udid: &str) -> Result<DeviceDetails> {
+        validate_udid(udid)?;
+        let dev = self.list()?.into_iter().find(|d| d.udid == udid).ok_or_else(|| GhostError::Device("appareil introuvable".into()))?;
+        let info: HashMap<String, String> = [
+            ("DeviceName", dev.name.as_str()),
+            ("ProductType", dev.product_type.as_str()),
+            ("ProductVersion", dev.os_version.as_str()),
+            ("BuildVersion", "SIM0001"),
+            ("ActivationState", "Activated"),
+            ("PasswordProtected", "true"),
+            ("UniqueDeviceID", dev.udid.as_str()),
+            ("SerialNumber", "SIMULATION0001"),
+        ]
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+        let battery = Battery { percent: Some(76), charging: Some(true), plugged: Some(true), full: Some(false), cycle_count: Some(212), health_percent: Some(91) };
+        Ok(build_details(&info, Some(battery)))
+    }
+
+    fn screenshot(&self, _udid: &str) -> Result<Screenshot> {
+        Err(GhostError::Device("l'écran n'est pas disponible en mode simulation (appareils fictifs)".into()))
+    }
 }
 
 #[cfg(test)]
@@ -623,6 +835,62 @@ mod tests {
         let d = SimBackend::new(0).list().unwrap();
         assert!(!d[0].usage.is_empty());
         assert_eq!(d[0].usage.iter().map(|c| c.bytes).sum::<u64>(), d[0].used_bytes.unwrap());
+    }
+
+    #[test]
+    fn battery_parsing_from_lockdown_and_ioreg() {
+        let kv = parse_key_values("BatteryCurrentCapacity: 83\nBatteryIsCharging: true\nExternalConnected: true\nFullyCharged: false\n");
+        let ioreg = "<dict><key>CycleCount</key>\n<integer>312</integer>\n<key>DesignCapacity</key><integer>3200</integer><key>NominalChargeCapacity</key>\n  <integer>2880</integer></dict>";
+        let b = parse_battery(&kv, ioreg).unwrap();
+        assert_eq!(b.percent, Some(83));
+        assert_eq!(b.charging, Some(true));
+        assert_eq!(b.full, Some(false));
+        assert_eq!(b.cycle_count, Some(312));
+        assert_eq!(b.health_percent, Some(90));
+    }
+
+    #[test]
+    fn battery_absent_or_hostile_values() {
+        assert!(parse_battery(&HashMap::new(), "").is_none());
+        let kv = parse_key_values("BatteryCurrentCapacity: 250\n");
+        assert_eq!(parse_battery(&kv, "").unwrap().percent, Some(100), "pourcentage borné à 100");
+        let kv = parse_key_values("BatteryCurrentCapacity: abc\n");
+        assert!(parse_battery(&kv, "<key>CycleCount</key><integer>x</integer>").is_none());
+        // santé non calculée si la capacité d'origine est nulle (pas de division par zéro)
+        let io = "<key>DesignCapacity</key><integer>0</integer><key>NominalChargeCapacity</key><integer>100</integer>";
+        assert!(parse_battery(&parse_key_values("BatteryCurrentCapacity: 5\n"), io).unwrap().health_percent.is_none());
+    }
+
+    #[test]
+    fn details_show_only_present_fields_and_flag_sensitive_group() {
+        let kv = parse_key_values("DeviceName: iPhone de Léa\nProductType: iPhone15,2\nProductVersion: 17.5.1\nModelNumber: MPXV3\nRegionInfo: ZD/A\nPasswordProtected: true\nSerialNumber: F2LXXXX\nEmpty:\n  nested: ignoré\n");
+        let d = build_details(&kv, None);
+        let appareil = &d.groups[0];
+        assert_eq!(appareil.title, "Appareil");
+        assert!(appareil.items.iter().any(|i| i.label == "Modèle" && i.value == "iPhone 14 Pro"));
+        assert!(appareil.items.iter().any(|i| i.label == "Numéro de modèle" && i.value == "MPXV3ZD/A"));
+        let sys = d.groups.iter().find(|g| g.title == "Système").unwrap();
+        assert!(sys.items.iter().any(|i| i.label == "Code de verrouillage" && i.value == "Oui"));
+        assert!(d.groups.iter().all(|g| g.title != "Réseau"), "groupe vide omis");
+        let ids = d.groups.iter().find(|g| g.sensitive).unwrap();
+        assert_eq!(ids.items.len(), 1);
+        assert!(!d.groups.iter().flat_map(|g| &g.items).any(|i| i.value == "ignoré"), "lignes imbriquées ignorées");
+    }
+
+    #[test]
+    fn sim_details_and_screenshot() {
+        let sim = SimBackend::new(0);
+        let d = sim.details(SIM_SOURCE).unwrap();
+        assert_eq!(d.battery.unwrap().percent, Some(76));
+        assert!(sim.screenshot(SIM_SOURCE).is_err());
+        assert!(sim.details("x; rm").is_err());
+    }
+
+    #[test]
+    fn hostile_udid_rejected_for_details_and_screenshot() {
+        let b = LibimobiledeviceBackend::new(Tools::default());
+        assert!(matches!(b.details("a b"), Err(GhostError::Security(_))));
+        assert!(matches!(b.screenshot("$(id)"), Err(GhostError::Security(_))));
     }
 
     #[test]

@@ -1,32 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { api, CloneReport, Compatibility, DeviceInfo, errText } from "../api";
+import DeviceCard from "./DeviceCard";
 import { etaFrom, fmtBytes, fmtEta } from "../format";
-import { Flow, Phone, Ring, SuccessMark, UsageBars, useApp, useOp } from "../ui";
-
-function DeviceCard({ role, d, onPair }: { role: string; d: DeviceInfo | undefined; onPair: (d: DeviceInfo) => void }) {
-  return (
-    <div className={`card dev ${d ? "sel" : ""}`}>
-      <Phone label={role} on={!!d} name={d?.name} />
-      {d ? (
-        <div className="dev-info">
-          <b>{d.name}</b>
-          <span className="muted small">{d.model}{d.osVersion ? ` · iOS ${d.osVersion}` : ""}</span>
-          <span className="muted small">Capacité {fmtBytes(d.capacityBytes)} · libre {fmtBytes(d.freeBytes)}</span>
-          {d.simulated && <span className="pill sim">SIMULATION</span>}
-          {!d.trusted && (
-            <>
-              <span className="pill err"><span className="dot" />Non approuvé</span>
-              <button className="btn primary" onClick={() => onPair(d)}>Se fier à cet ordinateur</button>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="dev-info"><b className="muted">En attente…</b><span className="muted small">Branchez et déverrouillez un iPhone</span></div>
-      )}
-    </div>
-  );
-}
+import { Flow, Ring, SuccessMark, UsageBars, useApp, useOp } from "../ui";
 
 export default function Transfer() {
   const { devices, devicesError, refreshDevices, source, dest, setSource, setDest, progress, confirm, toast, go, status } = useApp();
@@ -85,13 +62,13 @@ export default function Transfer() {
       {devicesError && <div className="alert err" style={{ marginBottom: 14 }}>{devicesError} <button className="btn" onClick={() => go("diagnostics")}>Diagnostic</button></div>}
 
       <div className="stage2">
-        <DeviceCard role="SOURCE" d={s} onPair={pair} />
+        <DeviceCard role="SOURCE" d={s} busy={op.busy} onPair={pair} />
         <div className="mid">
           <Flow active={op.busy || !!compat?.ok} />
           <button className="btn small-btn" disabled={op.busy || devices.length < 2} title="Inverser source et destination"
             onClick={() => { setSource(dest); setDest(source); }}>⇄ Inverser</button>
         </div>
-        <DeviceCard role="DESTINATION" d={t} onPair={pair} />
+        <DeviceCard role="DESTINATION" d={t} busy={op.busy} onPair={pair} />
       </div>
 
       <AnimatePresence mode="wait">

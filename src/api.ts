@@ -17,6 +17,11 @@ export interface DeviceInfo {
   capacityBytes: number | null; usedBytes: number | null; freeBytes: number | null;
   usage: UsageCategory[]; simulated: boolean; operations: string[]; note: string | null;
 }
+export interface Battery { percent: number | null; charging: boolean | null; plugged: boolean | null; full: boolean | null; cycleCount: number | null; healthPercent: number | null }
+export interface DetailItem { label: string; value: string }
+export interface DetailGroup { title: string; sensitive: boolean; items: DetailItem[] }
+export interface DeviceDetails { battery: Battery | null; groups: DetailGroup[] }
+export interface Screenshot { mime: string; data: string }
 export interface Compatibility { ok: boolean; warnings: string[]; blockers: string[] }
 export interface AppStatus {
   simulation: boolean; toolsOk: boolean; missingTools: string[]; version: string;
@@ -61,6 +66,8 @@ export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
   devices: () => invoke<DeviceInfo[]>("list_devices"),
+  details: (udid: string) => invoke<DeviceDetails>("device_details", { udid }),
+  screenshot: (udid: string) => invoke<Screenshot>("device_screenshot", { udid }),
   pair: (udid: string) => invoke<string>("pair_device", { udid }),
   compat: (sourceUdid: string, destUdid: string) => invoke<Compatibility>("check_compat", { sourceUdid, destUdid }),
   analyzeFolder: (path: string) => invoke<AnalysisReport>("analyze_folder", { path }),
