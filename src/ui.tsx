@@ -4,8 +4,7 @@ import { api, AppStatus, DeviceInfo, errText, onProgress, Progress, Settings } f
 import { fmtBytes, fmtEta, fmtPercent, fmtSpeed } from "./format";
 
 // ---------------------------------------------------------------- contexte
-export type PageId =
-  | "home" | "connect" | "clone" | "smart" | "analysis" | "backups" | "restore" | "history" | "security" | "diagnostics" | "settings";
+export type PageId = "transfer" | "diagnostics" | "settings";
 
 interface Ctx {
   status: AppStatus | null;

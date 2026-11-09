@@ -21,3 +21,9 @@ export function fmtDate(iso: string): string {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? iso : d.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
 }
+
+/** Temps restant estimé (s) à partir du temps écoulé et du pourcentage réel ; null tant que c'est trop tôt. */
+export function etaFrom(elapsedMs: number, percent: number): number | null {
+  if (percent < 2 || percent >= 100 || elapsedMs < 3000) return null;
+  return Math.round((elapsedMs / 1000) * ((100 - percent) / percent));
+}

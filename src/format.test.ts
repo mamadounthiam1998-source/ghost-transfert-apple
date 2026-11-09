@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtBytes, fmtEta, fmtPercent, fmtSpeed } from "./format";
+import { etaFrom, fmtBytes, fmtEta, fmtPercent, fmtSpeed } from "./format";
 
 describe("format", () => {
   it("formats bytes in decimal units", () => {
@@ -20,5 +20,11 @@ describe("format", () => {
     expect(fmtPercent(-5)).toBe("0 %");
     expect(fmtPercent(250)).toBe("100 %");
     expect(fmtPercent(45.67)).toBe("45.7 %");
+  });
+  it("estimates remaining time only from real progress", () => {
+    expect(etaFrom(1000, 50)).toBeNull();
+    expect(etaFrom(10000, 1)).toBeNull();
+    expect(etaFrom(60000, 50)).toBe(60);
+    expect(etaFrom(60000, 100)).toBeNull();
   });
 });

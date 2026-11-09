@@ -118,6 +118,19 @@ fn emitter(app: &AppHandle) -> impl FnMut(Progress) + '_ {
     }
 }
 
+/// Emetteur de progression GLOBALE pour un transfert complet : un seul pourcentage
+/// qui ne recule jamais, calcule a partir des progressions reelles de chaque etape.
+fn staged_emitter(app: &AppHandle) -> impl FnMut(Progress) + '_ {
+    let mut last = 0.0f64;
+    move |mut p| {
+        let (pct, label) = ghost_core::progress::clone_stage(&p.phase, p.percent);
+        last = last.max(pct);
+        p.percent = last;
+        p.phase = label.into();
+        let _ = app.emit("ghost-progress", p);
+    }
+}
+
 /// Enregistre l'issue d'une operation (journal + historique) puis la renvoie telle quelle.
 fn record<T>(
     st: &AppState,
@@ -449,9 +462,9 @@ pub async fn clone_start(app: AppHandle, st: St<'_>, req: CloneRequest) -> Resul
             };
             let mgr = st.manager();
             // 1. Sauvegarde officielle de la source + empreintes SHA-256
-            let info = mgr.create(backend.as_ref(), &src, req.password.as_deref(), &st.ctl, &mut emitter(&app))?;
+            let info = mgr.create(backend.as_ref(), &src, req.password.as_deref(), &st.ctl, &mut staged_emitter(&app))?;
             // 2. Verification de la sauvegarde avant de toucher a la destination
-            let integrity = mgr.verify(&info.hid, &info.version, &st.ctl, &mut emitter(&app))?;
+            let integrity = mgr.verify(&info.hid, &info.version, &st.ctl, &mut staged_emitter(&app))?;
             if !integrity.intact {
                 return Err(GhostError::Integrity("la sauvegarde est altérée : la destination n'a pas été modifiée".into()));
             }
@@ -463,7 +476,7 @@ pub async fn clone_start(app: AppHandle, st: St<'_>, req: CloneRequest) -> Resul
                 source_udid: Some(src.udid.clone()),
                 password: req.password.clone(),
             };
-            backend.restore(&dst.udid, &mgr.data_root(&info.hid)?, &opts, &st.ctl, &mut emitter(&app))?;
+            backend.restore(&dst.udid, &mgr.data_root(&info.hid)?, &opts, &st.ctl, &mut staged_emitter(&app))?;
             let mut notes = compat.warnings.clone();
             notes.push("La vérification porte sur la sauvegarde source ; Apple ne permet pas à un logiciel tiers de relire le contenu de l'appareil de destination. Contrôlez-le après son redémarrage.".into());
             notes.push("Non transférés par conception Apple : Face ID/Touch ID, cartes Apple Pay, eSIM, applications elles-mêmes (retéléchargées), éléments uniquement dans iCloud.".into());

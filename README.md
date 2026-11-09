@@ -10,7 +10,7 @@ construit avec **Tauri 2 + Rust + React/TypeScript**. Tout fonctionne en local :
 | Élément | État |
 |---|---|
 | Cœur Rust (crypto, sécurité, transfert, sauvegarde, historique, diagnostic) | **63 tests automatisés** exécutés dans la CI |
-| Interface (11 écrans, thème sombre/clair, animations) | Compilée et testée, rendu vérifié par captures d'écran |
+| Interface (un seul écran de transfert + Diagnostic + Paramètres) | Compilée et testée, rendu vérifié par captures d'écran |
 | Mode simulation (appareils fictifs, explicite) | Opérationnel, sert aux tests sans appareil |
 | Communication avec de **vrais** iPhone/iPad | **Écrite mais non testée sur du matériel réel** (voir `docs/COMPATIBILITE_APPLE.md`) |
 | Installateurs `.exe` / `.msi` / `.dmg` | Produits par GitHub Actions (artefacts du workflow) |

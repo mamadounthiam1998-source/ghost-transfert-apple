@@ -1,13 +1,15 @@
 # Guide d'utilisation
 
-CONNECTER → ANALYSER → SÉLECTIONNER → TRANSFÉRER → VÉRIFIER → TERMINÉ
+Un seul écran, comme un outil de migration classique :
 
-1. **Connexion des appareils** : branchez la source et la destination, déverrouillez-les, touchez « Se fier ». Choisissez source et destination ; la compatibilité s'affiche.
-2. **Analyse** : espace des appareils (direct) ; décompte par catégorie sur une sauvegarde ou un dossier.
-3. **Ghost Clone** : mode rapide, complet ou personnalisé, aperçu, confirmation, puis exécution avec progression réelle et rapport.
-4. **Transfert intelligent** : copie vérifiée dossier → dossier, par catégories, sans doublons, reprise possible.
-5. **Sauvegardes** : créer (mot de passe facultatif), vérifier, exporter (chiffré AES-256-GCM, mot de passe ≥ 8 caractères), importer, supprimer.
-6. **Restaurations** : restaurer une sauvegarde sur l'appareil destination (confirmation obligatoire).
-7. **Historique / Sécurité / Diagnostic / Paramètres** : journal, auto-test, état des composants, thème, mode simulation.
+1. **Branchez les deux iPhone** (câble de données), déverrouillez-les et touchez « Se fier ». Le premier détecté devient la **source**, le second la **destination** (bouton « Inverser » si besoin).
+2. Le logiciel affiche la **quantité de données par catégorie** de la source (photos et vidéos, applications, calendrier, autres) et le total.
+3. Cliquez sur **TRANSFÉRER** et confirmez : les données de la destination seront remplacées.
+4. Suivez le **pourcentage global** : lecture de la source → contrôle → écriture sur la destination. La quantité affichée (≈ X Go sur Y Go) est calculée à partir du pourcentage réel.
+5. À la fin, laissez la destination redémarrer et contrôlez son contenu.
 
-**Mode simulation** : Paramètres → « Utiliser des appareils fictifs ». Jamais activé automatiquement ; toutes les opérations sont marquées SIMULATION.
+En haut à droite : **Diagnostic** (état des pilotes et outils, bouton d'installation de « Appareils Apple » sous Windows) et **Paramètres** (thème, animations, mode simulation).
+
+Le transfert utilise la sauvegarde puis la restauration officielles Apple. Il ne copie pas les applications elles-mêmes, Face ID/Touch ID, Apple Pay ni l'eSIM (limites d'Apple).
+
+> Les moteurs de sauvegarde chiffrée, d'export/import et de transfert dossier→dossier restent dans le cœur (`ghost-core`) et ses tests ; l'interface n'en expose volontairement que l'essentiel.
