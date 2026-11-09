@@ -581,6 +581,23 @@ pub async fn diagnostics_run(st: St<'_>) -> Result<Vec<Check>> {
     blocking(move || Ok(run_diagnostics(&st.tools))).await
 }
 
+/// Ouvre la page du Microsoft Store de « Appareils Apple » (pilotes USB Apple).
+/// L'adresse est fixe : aucune donnee de l'interface n'est transmise au systeme.
+#[tauri::command]
+pub fn open_apple_devices_store() -> Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", "ms-windows-store://pdp/?ProductId=9NP83LWLPZ9K"])
+            .creation_flags(0x0800_0000)
+            .spawn()?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    Err(GhostError::Device("Cette installation concerne uniquement Windows (macOS intègre déjà les pilotes).".into()))
+}
+
 #[tauri::command]
 pub fn security_selftest() -> Vec<Check> {
     core_selftest()

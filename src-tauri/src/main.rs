@@ -57,6 +57,7 @@ fn main() {
             commands::history_list,
             commands::history_clear,
             commands::diagnostics_run,
+            commands::open_apple_devices_store,
             commands::security_selftest,
             commands::diagnostics_export,
             commands::verify_update,

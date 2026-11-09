@@ -19,6 +19,11 @@ export default function Diagnostics() {
           <div key={c.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--card-border)" }}>
             <div className="row"><Check ok={c.status === "ok" ? true : c.status === "warn" ? "warn" : false}>{c.status === "ok" ? "OK" : c.status === "warn" ? "ATTENTION" : "ERREUR"}</Check><b>{c.name}</b><span className="muted small mono">{c.detail}</span></div>
             {c.solution && <p className="small" style={{ margin: "6px 0 0 4px", color: "var(--warn)" }}>→ {c.solution}</p>}
+            {c.id === "amds" && c.status !== "ok" && (
+              <div style={{ margin: "8px 0 0 4px" }}>
+                <button className="btn primary" onClick={async () => { try { await api.openAppleDevicesStore(); toast("Page du Microsoft Store ouverte : cliquez sur « Obtenir », puis rebranchez l'iPhone."); } catch (e) { toast(errText(e), "err"); } }}>Installer « Appareils Apple » (Microsoft Store)</button>
+                <p className="muted small">Après l'installation, redémarrez si Windows le demande, puis cliquez sur « Relancer » ci-dessus.</p>
+              </div>)}
           </div>))}
       </div>
       <div className="card" style={{ marginTop: 16 }}>

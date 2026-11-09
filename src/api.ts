@@ -82,6 +82,7 @@ export const api = {
   history: () => invoke<HistoryEntry[]>("history_list", { limit: 200 }),
   historyClear: () => invoke<void>("history_clear", { confirm: true }),
   diagnostics: () => invoke<Check[]>("diagnostics_run"),
+  openAppleDevicesStore: () => invoke<void>("open_apple_devices_store"),
   selftest: () => invoke<Check[]>("security_selftest"),
   exportDiagnostics: (outPath: string) => invoke<void>("diagnostics_export", { outPath }),
   verifyUpdate: (path: string, sha256: string, signature: string, publicKey: string) =>
