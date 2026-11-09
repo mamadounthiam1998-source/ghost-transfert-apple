@@ -219,6 +219,18 @@ pub async fn list_devices(st: St<'_>) -> Result<Vec<DeviceInfo>> {
     blocking(move || st.backend().list()).await
 }
 
+/// Demande l'approbation « Se fier à cet ordinateur » (action explicite de l'utilisateur).
+#[tauri::command]
+pub async fn pair_device(st: St<'_>, udid: String) -> Result<String> {
+    let st = st.inner().clone();
+    blocking(move || {
+        let r = st.backend().pair(&udid);
+        st.logger.info(&format!("appairage demandé : {}", if r.is_ok() { "ok" } else { "en attente" }));
+        r
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn check_compat(st: St<'_>, source_udid: String, dest_udid: String) -> Result<Compatibility> {
     let st = st.inner().clone();

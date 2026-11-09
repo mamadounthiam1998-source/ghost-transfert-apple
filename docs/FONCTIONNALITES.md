@@ -17,11 +17,11 @@ Légende : ✅ prouvé par test automatisé · 🔧 écrit, validé seulement en
 - 🔧 Interface complète : compilée et rendue (captures), parcours exercés avec un pont Tauri simulé, **non testée de bout en bout dans l'application Tauri**.
 
 ## Limitations restantes
-- ❌ Outils libimobiledevice non embarqués dans les installateurs (à installer, voir `INSTALLATION.md`).
+- ⚠ Outils libimobiledevice : embarqués dans l'installateur Windows (démarrage vérifié en CI) ; **non embarqués sous macOS** (`brew install libimobiledevice`).
 - ❌ Installateurs non signés ni notarisés.
 - ❌ Mise à jour automatique : seule la **vérification** d'un paquet est fournie (pas de serveur de mises à jour ni de téléchargement).
 - ❌ Choix par catégorie lors d'un Ghost Clone : la restauration Apple est « tout ou rien » ; le choix par catégorie existe dans Transfert intelligent (dossiers).
-- ❌ Décompte photos/contacts directement sur un appareil : non permis par Apple ; fourni sur sauvegarde ou dossier.
+- ⚠ Volume par catégorie lu sur l'appareil (`com.apple.disk_usage` : photos, applications, calendrier…) : disponible dès l'approbation, **non vérifié sur un vrai appareil**. Le **nombre** de photos/contacts/messages n'est pas accessible directement : il est fourni après une sauvegarde (Analyse).
 - ❌ Retour à une version précédente de l'application, tests d'accessibilité automatisés, tests de performance chiffrés, tests de bout en bout sur appareil.
 - ⚠ Le mot de passe de chiffrement de sauvegarde est transmis à `idevicebackup2` en argument de ligne de commande (visible brièvement des autres processus de la machine).
 - ⚠ Suppression sécurisée : écrasement puis effacement ; l'effacement physique n'est pas garanti sur SSD/APFS.

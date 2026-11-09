@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { AnalysisReport, api, BackupInfo, CATEGORY_LABEL, Category, errText, pickFolder } from "../api";
 import { fmtBytes } from "../format";
-import { PageHeader, Stat, useApp, useOp } from "../ui";
+import { PageHeader, Stat, UsageBars, useApp, useOp } from "../ui";
 
 export default function Analysis() {
   const { devices, source, dest, go } = useApp();
@@ -23,8 +23,14 @@ export default function Analysis() {
           <div className="card"><Stat k="Verdict stockage" v={s.usedBytes != null && t.freeBytes != null ? (s.usedBytes <= t.freeBytes ? "Suffisant" : "Insuffisant") : "—"} /></div>
         </div>
       )}
+      {[s, t].filter((d): d is NonNullable<typeof d> => !!d).map((d) => (
+        <div key={d.udid} className="card" style={{ marginBottom: 16 }}>
+          <h2>Contenu de « {d.name} » <span className="muted small">(lu sur l'appareil)</span></h2>
+          <UsageBars device={d} />
+        </div>
+      ))}
       <div className="card">
-        <h2>Analyser</h2>
+        <h2>Analyse détaillée (nombre de fichiers)</h2>
         <div className="row">
           <button className="btn" disabled={op.busy} onClick={async () => { const p = await pickFolder("Dossier à analyser"); if (p) await op.run(() => api.analyzeFolder(p)); }}>Un dossier…</button>
           {backups.slice(0, 4).map((b) => <button key={b.hid + b.version} className="btn" disabled={op.busy} onClick={() => op.run(() => api.analyzeBackup(b.hid))}>Sauvegarde « {b.deviceName} »</button>)}

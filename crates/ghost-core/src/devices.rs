@@ -22,6 +22,15 @@ use std::{
 };
 use walkdir::WalkDir;
 
+/// Volume de données par catégorie, tel que l'appareil le déclare lui-même.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageCategory {
+    pub key: String,
+    pub label: String,
+    pub bytes: u64,
+}
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceInfo {
@@ -37,6 +46,8 @@ pub struct DeviceInfo {
     pub capacity_bytes: Option<u64>,
     pub used_bytes: Option<u64>,
     pub free_bytes: Option<u64>,
+    /// Volume par catégorie lu sur l'appareil (vide si l'appareil ne l'expose pas).
+    pub usage: Vec<UsageCategory>,
     pub simulated: bool,
     pub operations: Vec<String>,
     pub note: Option<String>,
@@ -75,6 +86,8 @@ pub trait DeviceBackend: Send + Sync {
         on: &mut dyn FnMut(Progress),
     ) -> Result<()>;
     fn set_backup_encryption(&self, udid: &str, password: &str) -> Result<()>;
+    /// Demande l'approbation « Se fier à cet ordinateur » sur l'appareil (appairage).
+    fn pair(&self, udid: &str) -> Result<String>;
 }
 
 pub fn friendly_model(product_type: &str) -> String {
@@ -155,6 +168,43 @@ pub fn parse_key_values(text: &str) -> HashMap<String, String> {
         .collect()
 }
 
+fn usage_label(key: &str) -> String {
+    match key {
+        "CameraUsage" => "Photos et vidéos (appareil photo)".into(),
+        "PhotoUsage" => "Photos (photothèque)".into(),
+        "MobileApplicationUsage" => "Applications".into(),
+        "CalendarUsage" => "Calendrier".into(),
+        "VoicemailUsage" => "Messagerie vocale".into(),
+        "WebAppCacheUsage" => "Cache des apps web".into(),
+        other => other.strip_suffix("Usage").unwrap_or(other).to_string(),
+    }
+}
+
+/// Construit le volume par categorie a partir du domaine `com.apple.disk_usage`.
+/// Toute cle `*Usage` numerique est reprise ; le reste de l'espace utilise est
+/// presente comme « Autres données » (systeme, messages, documents…), jamais invente.
+pub fn usage_from_disk_usage(kv: &HashMap<String, String>, used: Option<u64>) -> Vec<UsageCategory> {
+    let mut v: Vec<UsageCategory> = kv
+        .iter()
+        .filter(|(k, _)| k.ends_with("Usage"))
+        .filter_map(|(k, val)| val.parse::<u64>().ok().map(|b| (k, b)))
+        .filter(|(_, b)| *b > 0)
+        .map(|(k, b)| UsageCategory { key: k.clone(), label: usage_label(k), bytes: b })
+        .collect();
+    v.sort_by(|a, b| b.bytes.cmp(&a.bytes).then(a.key.cmp(&b.key)));
+    if let Some(used) = used {
+        let known: u64 = v.iter().map(|c| c.bytes).sum();
+        if used > known {
+            v.push(UsageCategory {
+                key: "Other".into(),
+                label: "Autres données (système, messages, documents…)".into(),
+                bytes: used - known,
+            });
+        }
+    }
+    v
+}
+
 fn parse_percent(line: &str) -> Option<f64> {
     let idx = line.find('%')?;
     let digits: String = line[..idx].chars().rev().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
@@ -187,6 +237,7 @@ impl LibimobiledeviceBackend {
             capacity_bytes: None,
             used_bytes: None,
             free_bytes: None,
+            usage: vec![],
             simulated: false,
             operations: vec![],
             note: None,
@@ -208,6 +259,7 @@ impl LibimobiledeviceBackend {
                     if let (Some(t), Some(f)) = (num("TotalDataCapacity"), d.free_bytes) {
                         d.used_bytes = Some(t.saturating_sub(f));
                     }
+                    d.usage = usage_from_disk_usage(&kv, d.used_bytes);
                 }
             }
             Ok(o) => {
@@ -232,9 +284,10 @@ impl DeviceBackend for LibimobiledeviceBackend {
     fn list(&self) -> Result<Vec<DeviceInfo>> {
         let o = self.tools.run("idevice_id", &["-l"], Duration::from_secs(8))?;
         if o.code != 0 {
-            return Err(GhostError::Device(
-                "le service USB Apple ne répond pas (voir Diagnostic)".into(),
-            ));
+            let detail = crate::security::redact(format!("{}{}", o.stderr, o.stdout).trim());
+            return Err(GhostError::Device(format!(
+                "le service USB Apple ne répond pas : installez « Appareils Apple » (Windows) ou vérifiez le service USB, puis ouvrez Diagnostic. {detail}"
+            )));
         }
         Ok(o.stdout
             .lines()
@@ -329,6 +382,19 @@ impl DeviceBackend for LibimobiledeviceBackend {
         Ok(())
     }
 
+    fn pair(&self, udid: &str) -> Result<String> {
+        validate_udid(udid)?;
+        let o = self.tools.run("idevicepair", &["-u", udid, "pair"], Duration::from_secs(30))?;
+        let msg = crate::security::redact(format!("{}{}", o.stdout, o.stderr).trim());
+        if o.code == 0 {
+            Ok(if msg.is_empty() { "Appairage effectué.".into() } else { msg })
+        } else {
+            Err(GhostError::Device(format!(
+                "Touchez « Se fier » sur l'appareil déverrouillé (saisissez son code si demandé), puis recommencez. Détail : {msg}"
+            )))
+        }
+    }
+
     fn set_backup_encryption(&self, udid: &str, password: &str) -> Result<()> {
         validate_udid(udid)?;
         let o = self.tools.run("idevicebackup2", &["-u", udid, "encryption", "on", password], Duration::from_secs(30))?;
@@ -390,6 +456,18 @@ impl SimBackend {
             capacity_bytes: Some(cap_gb * gb),
             used_bytes: Some(used_gb * gb),
             free_bytes: Some((cap_gb - used_gb) * gb),
+            usage: usage_from_disk_usage(
+                &[
+                    ("CameraUsage", used_gb * gb * 42 / 100),
+                    ("PhotoUsage", used_gb * gb * 6 / 100),
+                    ("MobileApplicationUsage", used_gb * gb * 30 / 100),
+                    ("CalendarUsage", 12_000_000),
+                ]
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+                Some(used_gb * gb),
+            ),
             simulated: true,
             operations: vec!["backup".into(), "restore".into(), "clone".into()],
             note: Some("Appareil FICTIF (mode simulation).".into()),
@@ -499,6 +577,10 @@ impl DeviceBackend for SimBackend {
     fn set_backup_encryption(&self, _udid: &str, _password: &str) -> Result<()> {
         Ok(())
     }
+
+    fn pair(&self, _udid: &str) -> Result<String> {
+        Ok("Simulation : appareil déjà approuvé.".into())
+    }
 }
 
 #[cfg(test)]
@@ -510,6 +592,37 @@ mod tests {
         let kv = parse_key_values("DeviceName: iPhone de Léa\nProductType: iPhone14,5\nProductVersion: 17.2\nBad line\n");
         assert_eq!(kv["DeviceName"], "iPhone de Léa");
         assert_eq!(kv["ProductVersion"], "17.2");
+    }
+
+    #[test]
+    fn usage_categories_from_disk_usage() {
+        let kv = parse_key_values(
+            "CameraUsage: 40000000000\nMobileApplicationUsage: 30000000000\nCalendarUsage: 5000000\nVoicemailUsage: 0\nTotalDiskCapacity: 256000000000\nFooUsage: abc\nBarUsage: 7\n",
+        );
+        let u = usage_from_disk_usage(&kv, Some(100_000_000_000));
+        assert_eq!(u[0].label, "Photos et vidéos (appareil photo)");
+        assert_eq!(u[1].label, "Applications");
+        assert!(u.iter().all(|c| c.key != "VoicemailUsage"), "les catégories vides sont omises");
+        assert!(u.iter().all(|c| c.key != "FooUsage"), "les valeurs non numériques sont ignorées");
+        assert!(u.iter().any(|c| c.label == "Bar"), "une clé inconnue est reprise telle quelle");
+        let other = u.last().unwrap();
+        assert_eq!(other.key, "Other");
+        assert_eq!(u.iter().map(|c| c.bytes).sum::<u64>(), 100_000_000_000, "la somme doit égaler l'espace utilisé");
+    }
+
+    #[test]
+    fn usage_without_used_bytes_has_no_remainder_and_empty_when_absent() {
+        assert!(usage_from_disk_usage(&HashMap::new(), None).is_empty());
+        let kv = parse_key_values("CalendarUsage: 10\n");
+        assert_eq!(usage_from_disk_usage(&kv, None).len(), 1);
+        assert_eq!(usage_from_disk_usage(&kv, Some(10)).len(), 1, "pas de reste si tout est expliqué");
+    }
+
+    #[test]
+    fn sim_devices_expose_usage() {
+        let d = SimBackend::new(0).list().unwrap();
+        assert!(!d[0].usage.is_empty());
+        assert_eq!(d[0].usage.iter().map(|c| c.bytes).sum::<u64>(), d[0].used_bytes.unwrap());
     }
 
     #[test]

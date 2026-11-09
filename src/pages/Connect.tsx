@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { api, Compatibility, DeviceInfo } from "../api";
+import { api, Compatibility, DeviceInfo, errText } from "../api";
 import { fmtBytes } from "../format";
-import { Check, Flow, PageHeader, Phone, useApp } from "../ui";
+import { Check, Flow, PageHeader, Phone, UsageBars, useApp } from "../ui";
 
 function Info({ d }: { d: DeviceInfo }) {
   return (
@@ -16,7 +16,7 @@ function Info({ d }: { d: DeviceInfo }) {
 }
 
 export default function Connect() {
-  const { devices, devicesError, refreshDevices, source, dest, setSource, setDest, status, go } = useApp();
+  const { devices, devicesError, refreshDevices, source, dest, setSource, setDest, status, go, toast } = useApp();
   const [compat, setCompat] = useState<Compatibility | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => { const run = async () => { await refreshDevices(); setLoading(false); }; void run(); const t = setInterval(run, 3000); return () => clearInterval(t); }, [refreshDevices]);
@@ -33,8 +33,15 @@ export default function Connect() {
         <div style={{ flex: 1, minWidth: 230 }}>
           {sel ? <Info d={sel} /> : <p className="muted">Choisissez un appareil détecté ci-dessous.</p>}
           {sel?.note && <p className="muted small">{sel.note}</p>}
+          {sel && !sel.trusted && (
+            <button className="btn primary" style={{ marginTop: 8 }} onClick={async () => {
+              try { toast(await api.pair(sel.udid)); } catch (e) { toast(errText(e), "err"); }
+              await refreshDevices();
+            }}>Demander l'approbation sur l'appareil</button>
+          )}
         </div>
       </div>
+      {sel && (<div style={{ marginTop: 16 }}><h2>Données par catégorie</h2><UsageBars device={sel} /></div>)}
       <div className="row" style={{ marginTop: 14 }}>
         {devices.filter((d) => d.udid !== other).map((d) => (
           <button key={d.udid} className={`chip ${sel?.udid === d.udid ? "on" : ""}`} onClick={() => setSel(d.udid)}>{d.name}</button>
@@ -48,7 +55,14 @@ export default function Connect() {
       {devicesError && <div className="alert err" style={{ marginBottom: 16 }}>{devicesError}
         {!status?.toolsOk && <div style={{ marginTop: 8 }}><button className="btn" onClick={() => go("diagnostics")}>Ouvrir le diagnostic</button></div>}</div>}
       {!devicesError && !loading && devices.length === 0 && (
-        <div className="alert info" style={{ marginBottom: 16 }}>Aucun appareil Apple détecté. Branchez-le, déverrouillez-le, puis touchez « Se fier à cet ordinateur ».</div>
+        <div className="alert info" style={{ marginBottom: 16 }}><b>Aucun appareil Apple détecté.</b>
+          <ul>
+            <li>Utilisez un câble qui transfère les données (pas un câble de charge seule), branché directement sur le PC.</li>
+            <li>Déverrouillez l'iPhone, puis touchez « Se fier à cet ordinateur » et saisissez son code.</li>
+            <li>Windows : l'application « Appareils Apple » (Microsoft Store) ou iTunes doit être installée.</li>
+            <li>En cas de doute, ouvrez <b>Diagnostic</b> : il indique précisément ce qui manque.</li>
+          </ul>
+          <button className="btn" onClick={() => go("diagnostics")}>Ouvrir le diagnostic</button></div>
       )}
       <div className="grid g2"><Zone role="SOURCE" sel={s} setSel={setSource} other={dest} /><Zone role="DESTINATION" sel={t} setSel={setDest} other={source} /></div>
       <div style={{ margin: "10px auto 0", maxWidth: 520 }}><Flow active={!!compat?.ok} /></div>

@@ -23,7 +23,7 @@ fn check(id: &str, name: &str, status: &str, detail: String, solution: Option<&s
     Check { id: id.into(), name: name.into(), status: status.into(), detail, solution: solution.map(String::from) }
 }
 
-pub const REQUIRED_TOOLS: [&str; 3] = ["idevice_id", "ideviceinfo", "idevicebackup2"];
+pub const REQUIRED_TOOLS: [&str; 4] = ["idevice_id", "ideviceinfo", "idevicebackup2", "idevicepair"];
 
 pub fn run_diagnostics(tools: &Tools) -> Vec<Check> {
     let mut v = vec![];

@@ -8,7 +8,7 @@ Les installateurs sont générés par le workflow GitHub **Tests et installateur
 > Pour signer/notariser : ajoutez vos certificats aux secrets GitHub et complétez le workflow.
 
 ## Dépendances pour appareils réels
-**Windows** : installer « Appareils Apple » (Microsoft Store) ; placer `idevice_id.exe`, `ideviceinfo.exe`, `idevicebackup2.exe` et leurs DLL dans le dossier `tools` à côté de l'application (ou dans le PATH).
+**Windows** : installer « Appareils Apple » (Microsoft Store) ou iTunes (pilotes USB Apple). Les outils libimobiledevice (`idevice_id`, `ideviceinfo`, `idevicebackup2`, `idevicepair`) sont **embarqués dans l'installateur** par le workflow GitHub (paquet MSYS2) et leur démarrage est vérifié à chaque build. Ils sont distribués sous leurs licences LGPL/GPL (libimobiledevice).
 **macOS** : `brew install libimobiledevice`.
 Le **Diagnostic** de l'application indique ce qui manque.
 

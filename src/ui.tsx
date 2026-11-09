@@ -216,6 +216,26 @@ export function ProgressPanel({ onCancel, busy }: { onCancel?: () => void; busy:
   );
 }
 
+/** Volume par catégorie, exactement tel que déclaré par l'appareil. */
+export function UsageBars({ device }: { device: DeviceInfo }) {
+  const total = device.usedBytes ?? device.usage.reduce((a, c) => a + c.bytes, 0);
+  if (device.usage.length === 0) {
+    return <p className="muted small">Cet appareil n'a pas fourni le détail par catégorie{device.trusted ? "." : " : il doit d'abord approuver cet ordinateur."}</p>;
+  }
+  return (
+    <div>
+      {device.usage.map((c) => (
+        <div key={c.key} className="cat-row" style={{ gridTemplateColumns: "minmax(150px, 1.4fr) 2fr 90px" }}>
+          <span className="small">{c.label}</span>
+          <div className="bar"><motion.i initial={{ width: 0 }} animate={{ width: `${total ? Math.min(100, (c.bytes / total) * 100) : 0}%` }} /></div>
+          <span className="muted small mono" style={{ textAlign: "right" }}>{fmtBytes(c.bytes)}</span>
+        </div>
+      ))}
+      <p className="muted small" style={{ marginTop: 8 }}>Total utilisé : <b>{fmtBytes(device.usedBytes)}</b></p>
+    </div>
+  );
+}
+
 export const Stat = ({ k, v }: { k: string; v: string }) => (<div className="stat"><small>{k}</small><b>{v}</b></div>);
 
 export function PageHeader({ title, sub }: { title: string; sub: string }) {

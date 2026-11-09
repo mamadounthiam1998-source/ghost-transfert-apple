@@ -10,11 +10,12 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   calendar: "Calendrier", messages: "Messages", settings: "Réglages", other: "Autres",
 };
 
+export interface UsageCategory { key: string; label: string; bytes: number }
 export interface DeviceInfo {
   udid: string; name: string; model: string; productType: string; osVersion: string;
   connected: boolean; trusted: boolean;
   capacityBytes: number | null; usedBytes: number | null; freeBytes: number | null;
-  simulated: boolean; operations: string[]; note: string | null;
+  usage: UsageCategory[]; simulated: boolean; operations: string[]; note: string | null;
 }
 export interface Compatibility { ok: boolean; warnings: string[]; blockers: string[] }
 export interface AppStatus {
@@ -60,6 +61,7 @@ export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
   devices: () => invoke<DeviceInfo[]>("list_devices"),
+  pair: (udid: string) => invoke<string>("pair_device", { udid }),
   compat: (sourceUdid: string, destUdid: string) => invoke<Compatibility>("check_compat", { sourceUdid, destUdid }),
   analyzeFolder: (path: string) => invoke<AnalysisReport>("analyze_folder", { path }),
   analyzeBackup: (hid: string) => invoke<AnalysisReport>("analyze_backup", { hid }),
